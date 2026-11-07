@@ -52,8 +52,16 @@ class Hands:
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                   text=True)
         self.lock = threading.Lock()
+        self.busy_until = 0.0
 
     def send(self, cmd):
+        # Never build a backlog: the device runs commands one by one (tap ~0.15 s, swipe = its ms).
+        # If the queue is already >0.5 s behind, drop this command instead of queueing it.
+        now = time.time()
+        if self.busy_until - now > 0.5:
+            return
+        cost = int(cmd.split()[-1]) / 1000 + 0.1 if cmd.startswith("input swipe") else 0.15
+        self.busy_until = max(now, self.busy_until) + cost
         with self.lock:
             self.p.stdin.write(cmd + "\n")
             self.p.stdin.flush()
@@ -70,10 +78,13 @@ class Hands:
 
     def close(self):
         try:
-            self.p.stdin.close()
-            self.p.wait(3)
-        except Exception:   # noqa: BLE001
             self.p.kill()
+        except Exception:   # noqa: BLE001
+            pass
+        # the device-side shell can outlive the local process: kill any input still queued there
+        subprocess.run([ADB, "-s", DEV, "shell", "pkill -9 -f 'input (tap|swipe)'; "
+                        "for p in $(pgrep -x sh); do [ $p != $$ ] && kill -9 $p; done"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
 
 
 def hp_frac(img, box):

@@ -15,7 +15,22 @@ def read(img, prev=None):
     hsv = cv2.cvtColor(img[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
     h, s, v = hsv[..., 0], hsv[..., 1], hsv[..., 2]
     blue = (h >= 95) & (h <= 118) & (s > 120) & (v > 150)
-    cands = _blobs(blue, 100, 800)
+    # own marker / enemy marker = round portraits (r ~15-22) with a blue (me) or red/orange (enemy) rim
+    gray = cv2.cvtColor(img[y1:y2, x1:x2], cv2.COLOR_BGR2GRAY)
+    circ = cv2.HoughCircles(cv2.medianBlur(gray, 3), cv2.HOUGH_GRADIENT, 1, 20, param1=90, param2=22,
+                            minRadius=14, maxRadius=23)
+    cands, foes_c = [], []
+    yy, xx = np.mgrid[0:gray.shape[0], 0:gray.shape[1]]
+    for cx, cy, r in (circ[0] if circ is not None else []):
+        dd = np.hypot(xx - cx, yy - cy)
+        rim, core = (dd > r - 3) & (dd < r + 2), dd < r - 6
+        if core.sum() < 20 or gray[core].std() < 18:       # filled goal circles have a flat inside
+            continue
+        hr, sr = h[rim], s[rim]
+        if ((hr >= 90) & (hr <= 120) & (sr > 50)).mean() > 0.35:
+            cands.append((cx, cy, 1))
+        elif (((hr <= 12) | (hr >= 170)) & (sr > 100)).mean() > 0.35:
+            foes_c.append((cx, cy))
     if prev is not None and cands:
         px, py = prev[0] - x1, prev[1] - y1
         near = [b for b in cands if (b[0] - px) ** 2 + (b[1] - py) ** 2 < 90 ** 2]
@@ -24,6 +39,6 @@ def read(img, prev=None):
     goals = _blobs((h >= 6) & (h <= 20) & (s > 150) & (v > 200), 120, 900)
     npcs = _blobs((h >= 21) & (h <= 34) & (s > 80) & (s < 210) & (v > 160), 15, 140)
     red = ((h <= 5) | (h >= 172)) & (s > 150) & (v > 150)
-    enemies = _blobs(red, 60, 900)
+    enemies = foes_c
     off = lambda b: (b[0] + x1, b[1] + y1)
     return (off(me) if me else None), [off(b) for b in goals], [off(b) for b in npcs], [off(b) for b in enemies]

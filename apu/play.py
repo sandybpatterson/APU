@@ -25,6 +25,7 @@ sys.path.insert(0, r"C:\Users\trent\foodstreet-bot")
 import cv2       # noqa: E402
 import flash     # noqa: E402
 import minimap   # noqa: E402
+import nav       # noqa: E402
 
 ADB = r"C:\LDPlayer\LDPlayer9\adb.exe"
 DEV = "127.0.0.1:5555"
@@ -117,7 +118,8 @@ def play(seconds=90, direction="up"):
     last_score = time.time()
     hp_hist = [1.0] * 8
     prev_me = (40, 180)
-    stuck = {"pos": (0, 0), "t": time.time()}
+    stuck = {"pos": (0, 0), "t": time.time(), "side": 1}
+    lane, farm_until = "top", 0
     n = 0
     log(f"PLAY start: {seconds}s, direction {direction}, frames -> {out}")
     try:
@@ -144,7 +146,8 @@ def play(seconds=90, direction="up"):
                 hands.send(f"input swipe {tb[0]} {tb[1]} {tb[0]} {tb[1]} 4500")
                 last["base"] = now; hold_until = now + 7
                 log(f"HEAL: low hp {hp:.2f} -- stepping back, holding To Base 4.5 s")
-            # STEER by the minimap: farm NPC dots, every FARM_SEC go score at the nearest front goal
+            # STEER along the lane waypoints: go score at the closest active zone, then farm back at the
+            # lane's middle for farm_sec, then go again.
             if img is not None:
                 me, goals, npcs, foes = minimap.read(img, prev_me)
                 prev_me = me or prev_me
@@ -152,27 +155,31 @@ def play(seconds=90, direction="up"):
                 hurt = hp < hp_hist[0] - 0.08
                 hp_hist = hp_hist[1:] + [hp]
                 if me:
-                    mode = "score" if now - last_score >= lay["farm_sec"] and goals else "farm"
-                    pool = goals if mode == "score" else [p for p in npcs if math.dist(p, me) > 6]
-                    if pool:
-                        tgt = min(pool, key=lambda p: math.dist(p, me))
-                        d = (tgt[0] - me[0], tgt[1] - me[1])
-                        if mode == "score" and math.dist(tgt, me) < lay["goal_near"] and now >= hold_until and (foe_near or hurt):
+                    if me[0] > 110:
+                        lane = nav.lane_of(me)
+                    zone = nav.active_zone(lane, goals)
+                    farming = now < farm_until
+                    tgt = nav.step_toward(me, lane, ("T2" if lane == "top" else "B2") if farming else zone)
+                    d = (tgt[0] - me[0], tgt[1] - me[1])
+                    at_zone = math.dist(nav.N[zone], me) < lay["goal_near"]
+                    if not farming and at_zone and now >= hold_until:
+                        if foe_near or hurt:
                             if now - last["log"] >= 3:
-                                log(f"NOT scoring: {'enemy near' if foe_near else 'being hit'}")
-                        elif mode == "score" and math.dist(tgt, me) < lay["goal_near"] and now >= hold_until:
-                            hold_until = now + lay["score_sec"]; last_score = now
-                            a = lay["attack"]
-                            hands.send(f"input swipe {a[0]} {a[1]} {a[0]} {a[1]} {int(lay['score_sec'] * 1000) - 300}")
-                            log(f"SCORE: at the goal {tuple(int(a) for a in tgt)}, holding the score button")
-                    # STUCK: marker hasn't moved for 3 s -> sidestep
+                                log(f"NOT scoring at {zone}: {'enemy near' if foe_near else 'being hit'}")
+                        else:
+                            a_ = lay["attack"]
+                            hands.send(f"input swipe {a_[0]} {a_[1]} {a_[0]} {a_[1]} {int(lay['score_sec'] * 1000)}")
+                            hold_until = now + lay["score_sec"] + 0.3
+                            farm_until = hold_until + lay["farm_sec"]
+                            log(f"SCORE: holding at {zone} ({lane} lane)")
+                    # STUCK: marker hasn't moved for 2.5 s -> sidestep, alternating sides
                     if math.dist(me, stuck["pos"]) > 3:
                         stuck.update(pos=me, t=now)
-                    elif now - stuck["t"] > 3 and now > side_until:
-                        side_until = now + 1.5; stuck["t"] = now
-                        log(f"STUCK at {tuple(int(a) for a in me)} -- sidestepping")
+                    elif now - stuck["t"] > 2.5 and now > side_until:
+                        side_until = now + 1.2; stuck["t"] = now; stuck["side"] *= -1
+                        log(f"STUCK at {tuple(int(a) for a in me)} -- sidestep {stuck['side']}")
                     if now < side_until:
-                        d = (-d[1], d[0])
+                        d = (-d[1] * stuck["side"], d[0] * stuck["side"])
             if now < hold_until:
                 time.sleep(lay["tick"]); continue
             if now - last["move"] >= lay["move_every"]:

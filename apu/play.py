@@ -105,6 +105,8 @@ def play(seconds=90, direction="up"):
     last = {"save": 0, "m1": 0, "m2": 0, "unite": 0, "move": 0, "potion": 0, "base": 0, "log": 0}
     hold_until = side_until = 0
     last_score = time.time()
+    hp_hist = [1.0] * 8
+    prev_me = (40, 180)
     stuck = {"pos": (0, 0), "t": time.time()}
     n = 0
     log(f"PLAY start: {seconds}s, direction {direction}, frames -> {out}")
@@ -127,18 +129,28 @@ def play(seconds=90, direction="up"):
             if hp < lay["hp_potion"] and now - last["potion"] > 10:
                 hands.tap(lay["potion"]); last["potion"] = now; log(f"HEAL potion (hp {hp:.2f})")
             if hp < lay["hp_base"] and now - last["base"] > 20:
-                hands.tap(lay["to_base"]); last["base"] = now; hold_until = now + 7
-                log(f"HEAL to base (hp {hp:.2f})")
+                tb = lay["to_base"]
+                hands.stick(lay["joystick"], (-1, 0), lay["stick_radius"], 1500)
+                hands.send(f"input swipe {tb[0]} {tb[1]} {tb[0]} {tb[1]} 4500")
+                last["base"] = now; hold_until = now + 7
+                log(f"HEAL: low hp {hp:.2f} -- stepping back, holding To Base 4.5 s")
             # STEER by the minimap: farm NPC dots, every FARM_SEC go score at the nearest front goal
             if img is not None:
-                me, goals, npcs = minimap.read(img)
+                me, goals, npcs, foes = minimap.read(img, prev_me)
+                prev_me = me or prev_me
+                foe_near = any(math.dist(f, me) < lay['foe_near'] for f in foes) if me else False
+                hurt = hp < hp_hist[0] - 0.08
+                hp_hist = hp_hist[1:] + [hp]
                 if me:
                     mode = "score" if now - last_score >= lay["farm_sec"] and goals else "farm"
                     pool = goals if mode == "score" else [p for p in npcs if math.dist(p, me) > 6]
                     if pool:
                         tgt = min(pool, key=lambda p: math.dist(p, me))
                         d = (tgt[0] - me[0], tgt[1] - me[1])
-                        if mode == "score" and math.dist(tgt, me) < lay["goal_near"] and now >= hold_until:
+                        if mode == "score" and math.dist(tgt, me) < lay["goal_near"] and now >= hold_until and (foe_near or hurt):
+                            if now - last["log"] >= 3:
+                                log(f"NOT scoring: {'enemy near' if foe_near else 'being hit'}")
+                        elif mode == "score" and math.dist(tgt, me) < lay["goal_near"] and now >= hold_until:
                             hold_until = now + lay["score_sec"]; last_score = now
                             a = lay["attack"]
                             hands.send(f"input swipe {a[0]} {a[1]} {a[0]} {a[1]} {int(lay['score_sec'] * 1000) - 300}")

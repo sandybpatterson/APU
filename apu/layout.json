@@ -5,5 +5,5 @@
  "unite": [1450, 540], "unite_every": 5.0,
  "potion": [1050, 670], "to_base": [820, 770],
  "hp_box": [742, 240, 872, 310], "hp_potion": 0.45, "hp_base": 0.25,
- "goal_box": [450, 250, 1150, 700], "goal_orange": 0.06, "score_sec": 4,
+ "goal_box": [450, 250, 1150, 700], "goal_orange": 0.06, "score_sec": 6.5, "foe_near": 60,
  "farm_sec": 35, "goal_near": 15, "tick": 0.25}

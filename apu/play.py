@@ -24,6 +24,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, r"C:\Users\trent\foodstreet-bot")
 import cv2       # noqa: E402
 import flash     # noqa: E402
+import minimap   # noqa: E402
 
 ADB = r"C:\LDPlayer\LDPlayer9\adb.exe"
 DEV = "127.0.0.1:5555"
@@ -75,6 +76,24 @@ class Hands:
             self.p.kill()
 
 
+def hp_frac(img, box):
+    """Own HP bar over the player's head: its height moves with the name label, so search a band
+    (box = x1, y1, x2, y2 of that band) for the greenest row and measure its filled share."""
+    x1, y1, x2, y2 = box
+    hsv = cv2.cvtColor(img[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
+    g = (hsv[..., 0] > 35) & (hsv[..., 0] < 85) & (hsv[..., 1] > 120) & (hsv[..., 2] > 120)
+    row = g.sum(axis=1).argmax()
+    cols = g[max(0, row - 2):row + 3].any(axis=0)
+    return cols.sum() / 122.0
+
+
+def orange_frac(img, box):
+    """Enemy goal zones are orange; share of strong orange around the player."""
+    x1, y1, x2, y2 = box
+    hsv = cv2.cvtColor(img[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
+    return ((hsv[..., 0] > 8) & (hsv[..., 0] < 22) & (hsv[..., 1] > 170) & (hsv[..., 2] > 170)).mean()
+
+
 def play(seconds=90, direction="up"):
     lay = json.load(open(LAYOUT, encoding="utf-8"))
     flash.ON = True
@@ -83,7 +102,10 @@ def play(seconds=90, direction="up"):
     hands = Hands()
     d = DIRS[direction]
     t0 = time.time()
-    last = {"save": 0, "m1": 0, "m2": 0, "unite": 0, "move": 0}
+    last = {"save": 0, "m1": 0, "m2": 0, "unite": 0, "move": 0, "potion": 0, "base": 0, "log": 0}
+    hold_until = side_until = 0
+    last_score = time.time()
+    stuck = {"pos": (0, 0), "t": time.time()}
     n = 0
     log(f"PLAY start: {seconds}s, direction {direction}, frames -> {out}")
     try:
@@ -95,6 +117,42 @@ def play(seconds=90, direction="up"):
                             [cv2.IMWRITE_JPEG_QUALITY, 70])
                 n += 1
                 last["save"] = now
+            hp, org = 1.0, 0.0
+            if img is not None:
+                hp, org = hp_frac(img, lay["hp_box"]), orange_frac(img, lay["goal_box"])
+                if now - last["log"] >= 3:
+                    log(f"hp {hp:.2f} orange {org:.3f}")
+                    last["log"] = now
+            # HEAL: potion at half HP, recall to base when really low
+            if hp < lay["hp_potion"] and now - last["potion"] > 10:
+                hands.tap(lay["potion"]); last["potion"] = now; log(f"HEAL potion (hp {hp:.2f})")
+            if hp < lay["hp_base"] and now - last["base"] > 20:
+                hands.tap(lay["to_base"]); last["base"] = now; hold_until = now + 7
+                log(f"HEAL to base (hp {hp:.2f})")
+            # STEER by the minimap: farm NPC dots, every FARM_SEC go score at the nearest front goal
+            if img is not None:
+                me, goals, npcs = minimap.read(img)
+                if me:
+                    mode = "score" if now - last_score >= lay["farm_sec"] and goals else "farm"
+                    pool = goals if mode == "score" else [p for p in npcs if math.dist(p, me) > 6]
+                    if pool:
+                        tgt = min(pool, key=lambda p: math.dist(p, me))
+                        d = (tgt[0] - me[0], tgt[1] - me[1])
+                        if mode == "score" and math.dist(tgt, me) < lay["goal_near"] and now >= hold_until:
+                            hold_until = now + lay["score_sec"]; last_score = now
+                            a = lay["attack"]
+                            hands.send(f"input swipe {a[0]} {a[1]} {a[0]} {a[1]} {int(lay['score_sec'] * 1000) - 300}")
+                            log(f"SCORE: at the goal {tuple(int(a) for a in tgt)}, holding the score button")
+                    # STUCK: marker hasn't moved for 3 s -> sidestep
+                    if math.dist(me, stuck["pos"]) > 3:
+                        stuck.update(pos=me, t=now)
+                    elif now - stuck["t"] > 3 and now > side_until:
+                        side_until = now + 1.5; stuck["t"] = now
+                        log(f"STUCK at {tuple(int(a) for a in me)} -- sidestepping")
+                    if now < side_until:
+                        d = (-d[1], d[0])
+            if now < hold_until:
+                time.sleep(lay["tick"]); continue
             if now - last["move"] >= lay["move_every"]:
                 hands.stick(lay["joystick"], d, lay["stick_radius"], lay["move_ms"])
                 last["move"] = now

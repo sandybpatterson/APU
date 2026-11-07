@@ -1,6 +1,9 @@
 {"joystick": [225, 705], "stick_radius": 75, "move_ms": 700, "move_every": 0.75,
- "attack": [1445, 770],
- "m1": [1160, 500], "m1_every": 3.0,
- "m2": [1058, 668], "m2_every": 4.0,
- "unite": [1450, 530], "unite_every": 5.0,
- "tick": 0.25}
+ "attack": [1450, 770],
+ "m1": [1280, 600], "m1_every": 3.0,
+ "m2": [1180, 780], "m2_every": 4.0,
+ "unite": [1450, 540], "unite_every": 5.0,
+ "potion": [1050, 670], "to_base": [820, 770],
+ "hp_box": [742, 240, 872, 310], "hp_potion": 0.45, "hp_base": 0.25,
+ "goal_box": [450, 250, 1150, 700], "goal_orange": 0.06, "score_sec": 4,
+ "farm_sec": 35, "goal_near": 15, "tick": 0.25}

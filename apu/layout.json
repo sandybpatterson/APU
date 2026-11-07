@@ -1,0 +1,6 @@
+{"joystick": [225, 705], "stick_radius": 75, "move_ms": 700, "move_every": 0.75,
+ "attack": [1445, 770],
+ "m1": [1160, 500], "m1_every": 3.0,
+ "m2": [1058, 668], "m2_every": 4.0,
+ "unite": [1450, 530], "unite_every": 5.0,
+ "tick": 0.25}

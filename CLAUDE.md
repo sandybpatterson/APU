@@ -10,6 +10,19 @@ The afsd file named in brackets is working, live-proven code to copy from.
 
 ---
 
+## How APU runs: an AFSD extension (11/7, owner's idea)
+APU is NOT a separate program. It is loaded by AFSD (the Food Street bot window) as an EXTENSION:
+- AFSD Settings > Experimental > "Pokemon Unite" switch -> adds the **Unite!** tab and the **Pokemon Unite** job.
+- AFSD's Update clones / pulls this repo into `<afsd>/extensions/APU`; AFSD's Send logs pushes `logs/` here.
+- AFSD's bridge is `unite_ext.py` in the afsd repo. It calls this repo's **`apu/ext.py`**:
+  `VERSION`, `build_tab(parent, theme)` (Tkinter, theme = bg/fg/dim/card/gold/title/body),
+  `run_job(ctx)` with ctx = {log, stop, shell, logs_dir}; `ctx["shell"](cmd)` = `adb shell cmd` on LDPlayer.
+  Keep those names/signatures stable -- AFSD on the PC calls them. Put real work in other modules under `apu/`.
+- AFSD already has adb, FLASH, fast taps, restarts: when inside AFSD, import them (`adb_helper`, `flash`,
+  `fast_input`) instead of copying -- they are on sys.path. Copy only for a stand-alone tool.
+- One LDPlayer, two games: while the Unite job really plays, Food Street's own checks must be paused (not built yet).
+- Tests: `python -m pytest tests -q` here; AFSD's tests/test_unite.py loads this checkout too.
+
 ## 0. Hard rules (never break)
 - Never spend Aeos gems, money, or any paid currency; never confirm a purchase; never tap a price.
 - New behaviour starts LOG-ONLY: look, decide, log "WOULD press X because Y". It only acts after the logs prove it
@@ -132,4 +145,6 @@ apmtcg/touch.py with a pure, tested TouchParser]
    slow and safe. In-match play last.
 
 ## Log
-- 11/7 repo created (owner). These notes written from the Food Street bot's experience. No code yet.
+- 11/7 repo created (owner). These notes written from the Food Street bot's experience.
+- 11/7 v0.1: apu/ext.py -- empty "coming soon" tab + LOG-ONLY job (logs which app is in front to AFSD's log and
+  logs/unite_log.txt). tests/test_ext.py. Unite's real package name: read it from the first job log line.

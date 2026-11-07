@@ -81,9 +81,8 @@ class Hands:
             self.p.kill()
         except Exception:   # noqa: BLE001
             pass
-        # the device-side shell can outlive the local process: kill any input still queued there
-        subprocess.run([ADB, "-s", DEV, "shell", "pkill -9 -f 'input (tap|swipe)'; "
-                        "for p in $(pgrep -x sh); do [ $p != $$ ] && kill -9 $p; done"],
+        # the queue is at most ~0.5 s (see send); wait it out, then stop any input still running
+        subprocess.run([ADB, "-s", DEV, "shell", "sleep 0.7; pkill -9 -f 'input (tap|swipe)'"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
 
 

@@ -148,3 +148,14 @@ apmtcg/touch.py with a pure, tested TouchParser]
 - 11/7 repo created (owner). These notes written from the Food Street bot's experience.
 - 11/7 v0.1: apu/ext.py -- empty "coming soon" tab + LOG-ONLY job (logs which app is in front to AFSD's log and
   logs/unite_log.txt). tests/test_ext.py. Unite's real package name: read it from the first job log line.
+- 11/6 night (Claude, live with owner): first practice-match player built and run 4x (Venusaur vs Alolan Raichu bot).
+  `apu/play.py` (window copy eyes via foodstreet-bot/flash.py with flash.ON=True; persistent adb shell, drops a
+  command when >0.5 s behind -- an earlier version queued minutes of taps that kept firing after the match),
+  `apu/minimap.py` (own marker = Hough circle with BLUE rim, enemy = red/orange rim, filled goal circles skipped;
+  bright orange = active enemy score zone, yellow dots = NPCs; 230/239 replay frames tracked), `apu/nav.py` (lane
+  waypoints H-M-T1..T5-E / B1..B5; T4/B4 front zones), `apu/layout.json` (1600x900 taps: attack 1450,770; moves
+  1280,600 / 1180,780; potion 1050,670; To Base 820,770 held 4.5 s; unite 1450,540). Score = HOLD attack on the zone.
+  Results: levels up to 6-10 and farms, 0 scores yet (marker tracking was the bug; fixed but untested live). HP bar
+  reader is unreliable at low level. Owner's game rules: cat-face markers = bosses (team bonus); NPCs show a gold
+  pokeball number + red bar; score only at the closest zone, not with enemies near; being hit interrupts scoring;
+  more points = longer hold; heal in tall grass via To Base (hold 4 s), blue jump pads, or own score circles.
